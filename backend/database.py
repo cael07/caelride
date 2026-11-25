@@ -19,7 +19,7 @@ except Exception:
 # Path 2: Online Supabase PostgreSQL database (Tokyo ap-northeast-1)
 # ============================================================================
 DEFAULT_SQLITE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'auth.db')}"
-DEFAULT_SUPABASE_URL = "postgresql://postgres.cchdtavgisogqcoixghz:N6CezCoRAcPXWhD0@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
+DEFAULT_SUPABASE_URL = "postgresql+psycopg2://postgres.cchdtavgisogqcoixghz:N6CezCoRAcPXWhD0@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres"
 
 # Determine active database mode: 'local' (sqlite) or 'supabase' (postgres)
 db_mode = os.environ.get("DB_MODE", os.environ.get("DB_CHOICE", "supabase")).strip().lower()
@@ -36,9 +36,11 @@ else:
             _url = _url.replace("postgres:", "postgres.cchdtavgisogqcoixghz:", 1)
     print("DATABASE MODE: [PATH 2 - ONLINE SUPABASE POSTGRESQL] -> Connected to project cchdtavgisogqcoixghz")
 
-# Fix Render's legacy 'postgres://' for SQLAlchemy 2.0
+# Fix Render's legacy 'postgres://' and ensure explicit driver dialect for SQLAlchemy 2.0
 if _url.startswith("postgres://"):
-    _url = _url.replace("postgres://", "postgresql://", 1)
+    _url = _url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif _url.startswith("postgresql://") and not _url.startswith("postgresql+"):
+    _url = _url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 DATABASE_URL = _url
 
