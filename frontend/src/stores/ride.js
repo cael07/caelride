@@ -8,13 +8,23 @@ export const useRideStore = defineStore('ride', {
     currentBooking: null,
     driverLocation: null, // { lat, lng }
     passengerLocation: null, // { lat, lng }
+    // Chat
+    chatMessages: [], // [{ sender: 'me'|'other', text, time }]
+    chatOpen: false,
+    // Call
+    incomingCall: false,   // true when we have a pending call_offer
+    callActive: false,     // true during live call
+    callMuted: false,
+    _peerConn: null,       // RTCPeerConnection instance
+    _localStream: null,    // MediaStream
+    _pendingOffer: null,   // stored SDP offer while waiting for user accept
   }),
 
   actions: {
     getApiHost() {
-      // Use the actual production URL as default for Render
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
       const productionHost = 'https://pythonlogin-api.onrender.com';
-      let base = import.meta.env.VITE_API_URL || productionHost;
+      let base = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:8000' : productionHost);
       // If VITE_API_URL has /auth at the end, strip it
       if (base.endsWith('/auth')) {
         base = base.replace(/\/auth$/, '');
@@ -98,6 +108,32 @@ export const useRideStore = defineStore('ride', {
         } else if (data.type === 'booking_taken') {
           // Another driver accepted the ride, remove it from my list
           this.bookings = this.bookings.filter(b => b.id !== data.booking_id)
+
+        } else if (data.type === 'chat_message') {
+          this.chatMessages.push({
+            sender: 'other',
+            text: data.text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          })
+          // Auto-open chat drawer so message is visible
+          this.chatOpen = true
+
+        } else if (data.type === 'call_offer') {
+          this._pendingOffer = data.sdp
+          this.incomingCall = true
+
+        } else if (data.type === 'call_answer') {
+          if (this._peerConn) {
+            this._peerConn.setRemoteDescription({ type: 'answer', sdp: data.sdp })
+          }
+
+        } else if (data.type === 'call_ice') {
+          if (this._peerConn && data.candidate) {
+            this._peerConn.addIceCandidate(data.candidate).catch(() => {})
+          }
+
+        } else if (data.type === 'call_end') {
+          this._cleanupCall()
         }
       }
       
@@ -207,7 +243,7 @@ export const useRideStore = defineStore('ride', {
       }
     },
 
-    async createBooking(pickupLat, pickupLng, dropoffLat, dropoffLng) {
+    async createBooking(pickupLat, pickupLng, dropoffLat, dropoffLng, pickupAddress = '', dropoffAddress = '') {
       const auth = useAuthStore()
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const host = isLocal ? 'http://localhost:8000' : this.getApiHost();
@@ -221,7 +257,9 @@ export const useRideStore = defineStore('ride', {
             pickup_lat: pickupLat,
             pickup_lng: pickupLng,
             dropoff_lat: dropoffLat,
-            dropoff_lng: dropoffLng
+            dropoff_lng: dropoffLng,
+            pickup_address: pickupAddress,
+            dropoff_address: dropoffAddress
           })
         })
         const data = await res.json()
@@ -233,7 +271,9 @@ export const useRideStore = defineStore('ride', {
             pickup_lat: pickupLat,
             pickup_lng: pickupLng,
             dropoff_lat: dropoffLat,
-            dropoff_lng: dropoffLng
+            dropoff_lng: dropoffLng,
+            pickup_address: pickupAddress,
+            dropoff_address: dropoffAddress
           }
           this.passengerLocation = { lat: pickupLat, lng: pickupLng }
           return data.booking_id
@@ -307,6 +347,134 @@ export const useRideStore = defineStore('ride', {
         console.error("Failed to complete ride:", err)
       }
       return false
+    },
+
+    // ── Chat ────────────────────────────────────────────
+    sendChatMessage(text, targetUserId) {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+      const target = targetUserId || (this.currentBooking ? (this.currentBooking.driver_id || this.currentBooking.passenger_id) : null)
+      if (!target) {
+        console.warn("sendChatMessage: missing target_user_id", this.currentBooking)
+        return
+      }
+      this.ws.send(JSON.stringify({ type: 'chat_message', target_user_id: target, text }))
+      this.chatMessages.push({
+        sender: 'me',
+        text,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      })
+    },
+
+    // ── Audio Call ───────────────────────────────────────
+    async initiateCall(targetUserId) {
+      try {
+        this._localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        this._peerConn = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        })
+        this._localStream.getTracks().forEach(t => this._peerConn.addTrack(t, this._localStream))
+
+        this._peerConn.onicecandidate = (e) => {
+          if (e.candidate && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: 'call_ice',
+              target_user_id: targetUserId,
+              candidate: e.candidate
+            }))
+          }
+        }
+        this._peerConn.ontrack = (e) => {
+          const audio = document.getElementById('remote-audio')
+          if (audio) audio.srcObject = e.streams[0]
+        }
+
+        const offer = await this._peerConn.createOffer()
+        await this._peerConn.setLocalDescription(offer)
+        this.ws.send(JSON.stringify({
+          type: 'call_offer',
+          target_user_id: targetUserId,
+          sdp: offer.sdp
+        }))
+        this.callActive = true
+      } catch (err) {
+        console.error('Call initiation failed:', err)
+        alert('Could not access microphone. Please allow microphone access.')
+      }
+    },
+
+    async acceptCall(targetUserId) {
+      try {
+        this._localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        this._peerConn = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        })
+        this._localStream.getTracks().forEach(t => this._peerConn.addTrack(t, this._localStream))
+
+        this._peerConn.onicecandidate = (e) => {
+          if (e.candidate && this.ws) {
+            this.ws.send(JSON.stringify({
+              type: 'call_ice',
+              target_user_id: targetUserId,
+              candidate: e.candidate
+            }))
+          }
+        }
+        this._peerConn.ontrack = (e) => {
+          const audio = document.getElementById('remote-audio')
+          if (audio) audio.srcObject = e.streams[0]
+        }
+
+        await this._peerConn.setRemoteDescription({ type: 'offer', sdp: this._pendingOffer })
+        const answer = await this._peerConn.createAnswer()
+        await this._peerConn.setLocalDescription(answer)
+        this.ws.send(JSON.stringify({
+          type: 'call_answer',
+          target_user_id: targetUserId,
+          sdp: answer.sdp
+        }))
+        this.incomingCall = false
+        this._pendingOffer = null
+        this.callActive = true
+      } catch (err) {
+        console.error('Call accept failed:', err)
+      }
+    },
+
+    declineCall(targetUserId) {
+      const target = targetUserId || (this.currentBooking ? (this.currentBooking.driver_id || this.currentBooking.passenger_id) : null)
+      if (this.ws && this.ws.readyState === WebSocket.OPEN && target) {
+        this.ws.send(JSON.stringify({ type: 'call_end', target_user_id: target }))
+      }
+      this._cleanupCall()
+    },
+
+    endCall(targetUserId) {
+      const target = targetUserId || (this.currentBooking ? (this.currentBooking.driver_id || this.currentBooking.passenger_id) : null)
+      if (this.ws && this.ws.readyState === WebSocket.OPEN && target) {
+        this.ws.send(JSON.stringify({ type: 'call_end', target_user_id: target }))
+      }
+      this._cleanupCall()
+    },
+
+    toggleMute() {
+      if (this._localStream) {
+        const track = this._localStream.getAudioTracks()[0]
+        if (track) {
+          track.enabled = !track.enabled
+          this.callMuted = !track.enabled
+        }
+      }
+    },
+
+    _cleanupCall() {
+      if (this._peerConn) { this._peerConn.close(); this._peerConn = null }
+      if (this._localStream) { this._localStream.getTracks().forEach(t => t.stop()); this._localStream = null }
+      const audio = document.getElementById('remote-audio')
+      if (audio) audio.srcObject = null
+      this.callActive = false
+      this.callMuted = false
+      this.incomingCall = false
+      this._pendingOffer = null
     }
   }
 })

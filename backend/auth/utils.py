@@ -5,8 +5,8 @@ from jose import JWTError, jwt
 
 SECRET_KEY = "change-this-secret-in-production-use-env-var"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440   # 24 hours — prevents mid-ride session expiry for drivers/passengers
+REFRESH_TOKEN_EXPIRE_DAYS = 30       # 30 days — long-lived so users stay logged in across app restarts
 
 # Use PBKDF2-SHA256 instead of Bcrypt to avoid the 72-character limit
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")

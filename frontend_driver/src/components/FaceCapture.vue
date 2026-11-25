@@ -154,9 +154,9 @@ async function ensureLandmarker() {
 }
 
 function yawRatio(lm) {
-    const nose = lm[1]
-    const left = lm[234]
-    const right = lm[454]
+    const nose = lm[4]
+    const left = lm[33]
+    const right = lm[263]
     const denom = (right.x - left.x) || 1e-6
     return (nose.x - left.x) / denom
 }
@@ -277,7 +277,11 @@ async function startCamera() {
     const video = videoEl.value
     if (!video) return
     video.srcObject = stream
-    try { await video.play() } catch (_) {}
+    try { 
+        await video.play() 
+        video.width = video.videoWidth || 640
+        video.height = video.videoHeight || 480
+    } catch (_) {}
 
     hint.value = 'Align your face inside the circle'
     uiState.value = 'scanning'

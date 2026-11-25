@@ -40,11 +40,12 @@
         <div class="fc-pose-hud">
           <Transition name="fade-scale" mode="out-in">
             <div
-              :key="scanStage"
+              :key="isScanSuccess ? 'countdown-' + faceCountdown : currentStepKey"
               class="fc-pose-step pulse"
               :class="{ success: isScanSuccess }"
             >
-              <span>{{ ['Face Left', 'Face Right', 'Face Front'][scanStage] || 'Success!' }}</span>
+              <span v-if="isScanSuccess && faceCountdown > 0">{{ faceCountdown }}</span>
+              <span v-else>{{ stepLabels[currentStepIdx] || 'Success!' }}</span>
             </div>
           </Transition>
         </div>
@@ -54,12 +55,13 @@
       <div class="fc-instruction-bar" :class="{ 'success': isScanSuccess }">
         <div class="fc-instruction-icon">
           <Transition name="fade" mode="out-in">
-            <span :key="scanStage">
-              <span v-if="isScanSuccess">✅</span>
+            <span :key="isScanSuccess ? 'countdown-' + faceCountdown : currentStepIdx">
+              <span v-if="isScanSuccess && faceCountdown > 0">🕒</span>
+              <span v-else-if="isScanSuccess">✅</span>
               <span v-else-if="!faceAligned">👁</span>
-              <span v-else-if="scanStage === 0">⬅️</span>
-              <span v-else-if="scanStage === 1">➡️</span>
-              <span v-else-if="scanStage === 2">🎯</span>
+              <span v-else-if="currentStepIdx === 0">⬅️</span>
+              <span v-else-if="currentStepIdx === 1">➡️</span>
+              <span v-else-if="currentStepIdx === 2">🎯</span>
               <span v-else>📸</span>
             </span>
           </Transition>
@@ -87,183 +89,252 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import * as faceapi from 'face-api.js'
+import {
+    FaceLandmarker,
+    FilesetResolver,
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14"
 
 const emit = defineEmits(['captured'])
 
+/* ── Configuration ──────────────────────────────────────── */
+const FLIP_LR = false
+const TURN_HI = 0.62      // head clearly turned to one side
+const TURN_LO = 0.38      // head clearly turned to the other side
+const FRONT_MIN = 0.44    // facing forward band
+const FRONT_MAX = 0.56
+const FRONT_HOLD_MS = 600    // must hold "front" this long before countdown
+const COUNTDOWN_MS = 2000    // 2·1
+const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+
 /* ── State ──────────────────────────────────────────────── */
-const uiState    = ref('loading')   // loading | scanning | captured | error
-const hint       = ref('Loading face detection models…')
-const scanStage  = ref(0)           // 0: Left, 1: Right, 2: Front
+const uiState = ref('loading')
+const hint = ref('Loading face model…')
 const faceAligned = ref(false)
 const isScanSuccess = ref(false)
+const faceCountdown = ref(0)
 const capturedImg = ref(null)
+const currentStepIdx = ref(0)
+const stepLabels = ['⬅️ Turn your head to the LEFT', '➡️ Turn your head to the RIGHT', '🙂 Now face the camera']
 
-/* ── Template refs ──────────────────────────────────────── */
-const videoEl   = ref(null)
+/* ── Template refs ──────────────────────────────────────– */
+const videoEl = ref(null)
 
 /* ── Internals ──────────────────────────────────────────── */
-let stream          = null
-let rafId           = null
-let modelsReady     = false
-let captureInProgress = false
-let captureTimer    = null
+let landmarker = null
+let stream = null
+let rafId = null
+let stopFlag = false
+let stepDefs = []
+let stepsCompleted = []
+let frontHeldSince = 0
+let counting = false
+let countStart = 0
+let countdownLastShown = -1
 
-/* ── Geometry helpers ───────────────────────────────────── */
-function isFaceInOval(box, w, h) {
-  const cx = w / 2, cy = h / 2
-  const fcx = box.x + box.width  / 2
-  const fcy = box.y + box.height / 2
-  const dist = Math.sqrt((fcx - cx)**2 + (fcy - cy)**2)
-  // Slightly more relaxed centering for mobile (30% instead of 25%)
-  const isCentered = dist < (w * 0.3)
-  const isCorrectSize = box.width > (w * 0.25) && box.width < (w * 0.75)
-  return isCentered && isCorrectSize
-}
+const currentStepKey = () => stepDefs[currentStepIdx.value]?.key || 'unknown'
 
-/* ── Detection loop ─────────────────────────────────────── */
-async function detectionLoop() {
-  const video = videoEl.value
-  if (!video || !modelsReady || captureInProgress) return
-
-  const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 })
-
-  try {
-    const detection = await faceapi
-      .detectSingleFace(video, opts)
-      .withFaceLandmarks(true)
-
-    const aligned = detection
-      ? isFaceInOval(detection.detection.box, video.videoWidth, video.videoHeight)
-      : false
-
-    faceAligned.value = aligned
-
-    if (aligned && detection) {
-      const landmarks = detection.landmarks
-      const nose  = landmarks.getNose()[3]
-      const left  = landmarks.getLeftEye()[0]
-      const right = landmarks.getRightEye()[3]
-
-      const distL = Math.abs(nose.x - left.x)
-      const distR = Math.abs(nose.x - right.x)
-      const ratio = distL / (distR || 1)
-
-      if (scanStage.value === 0) {
-        hint.value = 'Face LEFT'
-        // Lower threshold (1.4 instead of 1.6)
-        if (ratio > 1.4) {
-          scanStage.value = 1
-          hint.value = 'Face RIGHT'
-        }
-      } else if (scanStage.value === 1) {
-        hint.value = 'Face RIGHT'
-        // Higher threshold (0.7 instead of 0.6)
-        if (ratio < 0.7) {
-          scanStage.value = 2
-          hint.value = 'Face FRONT'
-        }
-      } else if (scanStage.value === 2) {
-        hint.value = 'Face FRONT'
-        if (ratio > 0.8 && ratio < 1.25) {
-          scanStage.value = 3
-          isScanSuccess.value = true
-          hint.value = '📸 Perfect! Hold still...'
-          triggerCapture()
-          return
-        }
-      }
-    } else {
-      hint.value = 'Position your face in the circle'
+async function ensureLandmarker() {
+    if (landmarker) return landmarker
+    const fileset = await FilesetResolver.forVisionTasks(WASM_URL)
+    try {
+        landmarker = await FaceLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numFaces: 1,
+        })
+    } catch (_) {
+        landmarker = await FaceLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: MODEL_URL, delegate: "CPU" },
+            runningMode: "VIDEO",
+            numFaces: 1,
+        })
     }
-  } catch (_) { /* skip frame */ }
-
-  rafId = requestAnimationFrame(detectionLoop)
+    return landmarker
 }
 
-/* ── Capture photo ──────────────────────────────────────── */
-function triggerCapture() {
-  if (captureInProgress) return
-  captureInProgress = true
-  cancelAnimationFrame(rafId)
+function yawRatio(lm) {
+    const nose = lm[4]
+    const left = lm[33]
+    const right = lm[263]
+    const denom = (right.x - left.x) || 1e-6
+    return (nose.x - left.x) / denom
+}
 
-  captureTimer = setTimeout(() => {
+function captureFrame(video, canvas) {
+    canvas.width = video.videoWidth || 640
+    canvas.height = video.videoHeight || 480
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL("image/jpeg", 0.92)
+}
+
+function isFront(p) {
+    return p !== null && p >= FRONT_MIN && p <= FRONT_MAX
+}
+
+function cleanup() {
+    stopFlag = true
+    if (rafId) cancelAnimationFrame(rafId)
+    try { stream?.getTracks().forEach((t) => t.stop()) } catch (_) {}
+    if (videoEl.value) videoEl.value.srcObject = null
+    stream = null
+}
+
+async function detectionLoop() {
+    if (stopFlag) return
+    
     const video = videoEl.value
     if (!video) return
 
-    const c = document.createElement('canvas')
-    c.width  = video.videoWidth
-    c.height = video.videoHeight
-    const ctx = c.getContext('2d')
-    ctx.drawImage(video, 0, 0)
-    capturedImg.value = c.toDataURL('image/jpeg', 0.92)
+    let res = null
+    try { res = landmarker.detectForVideo(video, performance.now()) } catch (_) {}
+    const hasFace = !!(res?.faceLandmarks?.length)
+    const p = hasFace ? yawRatio(res.faceLandmarks[0]) : null
 
-    stopCamera()
-    uiState.value = 'captured'
-    emit('captured', capturedImg.value)
-  }, 800)
-}
+    // ── During countdown: face must stay present and front
+    if (counting) {
+        if (!hasFace || !isFront(p)) {
+            counting = false
+            frontHeldSince = 0
+            countdownLastShown = -1
+            hint.value = hasFace
+                ? "⚠️ Keep facing the camera — hold still"
+                : "⚠️ Face lost — look at the camera"
+        } else {
+            const elapsed = performance.now() - countStart
+            if (elapsed >= COUNTDOWN_MS) {
+                faceCountdown.value = 0
+                const canvas = document.createElement("canvas")
+                const dataUrl = captureFrame(video, canvas)
+                hint.value = "Captured ✓"
+                cleanup()
+                capturedImg.value = dataUrl
+                uiState.value = 'captured'
+                emit('captured', dataUrl)
+                return
+            }
+            const remaining = Math.max(1, Math.ceil((COUNTDOWN_MS - elapsed) / 1000))
+            if (remaining !== countdownLastShown) {
+                countdownLastShown = remaining
+                faceCountdown.value = remaining
+                hint.value = `Hold still… capturing in ${remaining}`
+            }
+        }
+        rafId = requestAnimationFrame(detectionLoop)
+        return
+    }
 
-/* ── Camera control ─────────────────────────────────────── */
-function stopCamera() {
-  if (rafId) cancelAnimationFrame(rafId)
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop())
-    stream = null
-  }
+    // ── Guided steps: left → right → front
+    if (hasFace) {
+        const step = stepDefs[currentStepIdx.value]
+        faceAligned.value = true
+        hint.value = step.label
+
+        if (step.test(p)) {
+            if (step.key === "front") {
+                if (!frontHeldSince) {
+                    frontHeldSince = performance.now()
+                }
+                if (performance.now() - frontHeldSince >= FRONT_HOLD_MS) {
+                    counting = true
+                    countStart = performance.now()
+                    countdownLastShown = -1
+                    faceCountdown.value = 2
+                    isScanSuccess.value = true
+                    hint.value = "Hold still… capturing in 2"
+                }
+            } else {
+                stepsCompleted.push(step.key)
+                currentStepIdx.value += 1
+                frontHeldSince = 0
+            }
+        } else if (step.key === "front") {
+            frontHeldSince = 0
+        }
+    } else {
+        faceAligned.value = false
+        if (stepDefs[currentStepIdx.value]?.key === "front") {
+            frontHeldSince = 0
+        }
+        hint.value = "No face detected — center your face in the frame"
+    }
+
+    rafId = requestAnimationFrame(detectionLoop)
 }
 
 async function startCamera() {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
-    })
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+            audio: false,
+        })
+    } catch (err) {
+        hint.value = "Could not open camera: " + (err?.message || err)
+        uiState.value = 'error'
+        return
+    }
+
     const video = videoEl.value
     if (!video) return
     video.srcObject = stream
-    await new Promise(res => { video.onloadedmetadata = res })
-    await video.play()
+    try { 
+        await video.play() 
+        video.width = video.videoWidth || 640
+        video.height = video.videoHeight || 480
+    } catch (_) {}
 
     hint.value = 'Align your face inside the circle'
     uiState.value = 'scanning'
     rafId = requestAnimationFrame(detectionLoop)
-  } catch (err) {
-    hint.value = 'Camera access denied.'
-    uiState.value = 'error'
-  }
 }
 
-/* ── Load models ────────────────────────────────────────── */
 async function init() {
-  uiState.value = 'loading'
-  hint.value    = 'Initializing...'
-  try {
-    const MODEL_URL = '/models'
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-    ])
-    modelsReady = true
+    uiState.value = 'loading'
+    hint.value = 'Loading face model…'
+    stopFlag = false
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+        hint.value = "Camera not supported in this browser."
+        uiState.value = 'error'
+        return
+    }
+
+    try {
+        await ensureLandmarker()
+    } catch (err) {
+        hint.value = "Failed to load face model (check your connection)."
+        uiState.value = 'error'
+        return
+    }
+
+    stepDefs = [
+        { key: "left",  label: "⬅️ Turn your head to the LEFT",
+          test: (p) => (FLIP_LR ? p < TURN_LO : p > TURN_HI) },
+        { key: "right", label: "➡️ Turn your head to the RIGHT",
+          test: (p) => (FLIP_LR ? p > TURN_HI : p < TURN_LO) },
+        { key: "front", label: "🙂 Now face the camera",
+          test: (p) => p >= FRONT_MIN && p <= FRONT_MAX },
+    ]
+
+    stepsCompleted = []
+    currentStepIdx.value = 0
+    faceAligned.value = false
+    isScanSuccess.value = false
+    frontHeldSince = 0
+    counting = false
+    countdownLastShown = -1
+
     await startCamera()
-  } catch (err) {
-    hint.value  = 'Failed to load face models.'
-    uiState.value = 'error'
-  }
 }
 
 function retake() {
-  capturedImg.value  = null
-  scanStage.value    = 0
-  isScanSuccess.value = false
-  captureInProgress  = false
-  if (captureTimer) clearTimeout(captureTimer)
-  startCamera()
+    capturedImg.value = null
+    init()
 }
 
 onMounted(init)
 onUnmounted(() => {
-  stopCamera()
-  if (captureTimer) clearTimeout(captureTimer)
+    cleanup()
 })
 </script>
 

@@ -116,6 +116,13 @@ const biometricSupported = ref(false)
 const apiStatus = ref('checking') // checking | online | offline
 
 onMounted(async () => {
+  // Check for access denied or expired session redirect
+  if (route.query.error === 'access_denied') {
+    error.value = 'Access denied. Only registered drivers are allowed to access this portal.'
+  } else if (route.query.error === 'session_expired') {
+    error.value = 'Your session has expired. Please log in again to sync your account details.'
+  }
+
   // Check for remembered username
   const lastUser = localStorage.getItem('last_username')
   if (lastUser) {
@@ -184,6 +191,12 @@ async function handleBiometricLogin() {
       loading.value = true
       await auth.login(form.value.username, 'biometric_bypass_mock', appId.value)
       
+      if (auth.user?.role !== 'driver') {
+        auth.logout()
+        error.value = 'Access denied. Only registered drivers are allowed to access this portal.'
+        return
+      }
+      
       // Remember username for next time
       localStorage.setItem('last_username', form.value.username)
       
@@ -207,7 +220,14 @@ async function handleLogin() {
   loading.value = true
   try {
     await auth.login(form.value.username, form.value.password, appId.value)
-    const redirect = route.query.redirect || '/driver'
+    
+    if (auth.user?.role !== 'driver') {
+      auth.logout()
+      error.value = 'Access denied. Only registered drivers are allowed to access this portal.'
+      return
+    }
+    
+    const redirect = route.query.redirect || '/dashboard'
     router.push(redirect)
   } catch (e) {
     error.value = e.message || 'Login failed.'

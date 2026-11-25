@@ -36,8 +36,20 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const auth = useAuthStore()
-  if (to.meta.requiresAuth && !auth.isAuthenticated) return '/login'
-  if (to.meta.guest && auth.isAuthenticated) return '/dashboard'
+  if (to.meta.requiresAuth) {
+    if (!auth.isAuthenticated) {
+      return '/login'
+    }
+    if (auth.user?.role !== 'driver') {
+      auth.logout()
+      return '/login?error=access_denied'
+    }
+  }
+  if (to.meta.guest && auth.isAuthenticated) {
+    if (auth.user?.role === 'driver') {
+      return '/dashboard'
+    }
+  }
 })
 
 export default router

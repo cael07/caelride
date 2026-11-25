@@ -93,18 +93,23 @@
               </div>
               
               <!-- Waze Navigation to Pickup -->
-              <a 
-                :href="`https://waze.com/ul?ll=${rideStore.currentBooking.pickup_lat},${rideStore.currentBooking.pickup_lng}&navigate=yes&from=${driverLocation.lat},${driverLocation.lng}`"
-                target="_blank"
+              <button 
+                type="button"
+                @click="openWazeToPickup"
                 class="btn-waze w-100 mt-3"
               >
                 <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_logo.svg" width="20" alt="Waze" />
                 Navigate to Pickup (Waze)
-              </a>
+              </button>
 
-              <!-- Google Maps Placeholder -->
-              <button class="btn-disabled w-100 mt-2" disabled>
-                Google Map (Unavailable on trial)
+              <!-- Google Maps Free Navigation to Pickup -->
+              <button 
+                type="button"
+                @click="openGoogleMapsToPickup"
+                class="btn-google-maps w-100 mt-2"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:8px;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                Start Navigation (Google Maps)
               </button>
             </div>
 
@@ -131,18 +136,23 @@
               </div>
               
               <!-- Waze Navigation Integration -->
-              <a 
-                :href="`https://waze.com/ul?ll=${rideStore.currentBooking.dropoff_lat},${rideStore.currentBooking.dropoff_lng}&navigate=yes&from=${driverLocation.lat},${driverLocation.lng}`"
-                target="_blank"
+              <button 
+                type="button"
+                @click="openWazeToDropoff"
                 class="btn-waze w-100 mt-3"
               >
                 <img src="https://upload.wikimedia.org/wikipedia/commons/6/66/Waze_logo.svg" width="20" alt="Waze" />
                 Navigate in Waze
-              </a>
+              </button>
 
-              <!-- Google Maps Placeholder -->
-              <button class="btn-disabled w-100 mt-2" disabled>
-                Google Map (Unavailable on trial)
+              <!-- Google Maps Free Navigation to Destination -->
+              <button 
+                type="button"
+                @click="openGoogleMapsToDropoff"
+                class="btn-google-maps w-100 mt-2"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:8px;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                Start Navigation (Google Maps)
               </button>
             </div>
 
@@ -249,6 +259,52 @@ watch(() => rideStore.bookings, async (newBookings) => {
 // Real or fallback driver location
 const driverLocation = ref({ lat: 14.5800, lng: 120.9700 })
 
+function openGoogleMapsToPickup() {
+  const b = rideStore.currentBooking
+  if (!b) return
+  const fromLat = driverLocation.value?.lat || 14.5800
+  const fromLng = driverLocation.value?.lng || 120.9700
+  const toLat = b.pickup_lat
+  const toLng = b.pickup_lng
+  
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${toLat},${toLng}&travelmode=driving&dir_action=navigate`
+  window.open(url, '_blank')
+}
+
+function openGoogleMapsToDropoff() {
+  const b = rideStore.currentBooking
+  if (!b) return
+  const fromLat = b.pickup_lat
+  const fromLng = b.pickup_lng
+  const toLat = b.dropoff_lat
+  const toLng = b.dropoff_lng
+  
+  const url = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${toLat},${toLng}&travelmode=driving&dir_action=navigate`
+  window.open(url, '_blank')
+}
+
+function openWazeToPickup() {
+  const b = rideStore.currentBooking
+  if (!b) return
+  const fromLat = driverLocation.value?.lat || 14.5800
+  const fromLng = driverLocation.value?.lng || 120.9700
+  const toLat = b.pickup_lat
+  const toLng = b.pickup_lng
+  const url = `https://www.waze.com/live-map/directions?navigate=yes&from=ll.${fromLat}%2C${fromLng}&to=ll.${toLat}%2C${toLng}`
+  window.open(url, '_blank')
+}
+
+function openWazeToDropoff() {
+  const b = rideStore.currentBooking
+  if (!b) return
+  const fromLat = b.pickup_lat
+  const fromLng = b.pickup_lng
+  const toLat = b.dropoff_lat
+  const toLng = b.dropoff_lng
+  const url = `https://www.waze.com/live-map/directions?navigate=yes&from=ll.${fromLat}%2C${fromLng}&to=ll.${toLat}%2C${toLng}`
+  window.open(url, '_blank')
+}
+
 const carIcon = L.divIcon({
   className: 'custom-map-marker',
   html: `
@@ -276,8 +332,8 @@ onMounted(async () => {
 
   map = L.map('driver-map', { zoomControl: false }).setView([driverLocation.value.lat, driverLocation.value.lng], 15)
   
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    attribution: '&copy; Google Maps'
   }).addTo(map)
 
   // Try Geolocating the driver
@@ -857,6 +913,28 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   justify-content: center;
   gap: 10px;
   box-shadow: 0 4px 12px rgba(51, 204, 255, 0.3);
+}
+
+.btn-google-maps {
+  background: #ea4335;
+  color: #ffffff;
+  border: none;
+  padding: 0.8rem;
+  border-radius: 8px;
+  font-weight: bold;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(234, 67, 53, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-google-maps:hover {
+  background: #d93025;
+  box-shadow: 0 6px 16px rgba(234, 67, 53, 0.45);
+  transform: translateY(-1px);
 }
 
 .btn-disabled {

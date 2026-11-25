@@ -1,5 +1,14 @@
 import sys
 import os
+import time
+
+# Set global application timezone to Asia/Manila (Philippine Standard Time, UTC+8)
+os.environ['TZ'] = 'Asia/Manila'
+if hasattr(time, 'tzset'):
+    try:
+        time.tzset()
+    except Exception:
+        pass
 
 # Add the 'backend' directory to the Python path
 # This allows 'import database' and other top-level imports in the backend to work correctly
@@ -16,3 +25,4 @@ except ImportError as e:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime
 from typing import Optional
@@ -10,6 +11,15 @@ class UserRegister(BaseModel):
     password: str
     confirm_password: str
     role: Optional[str] = "passenger"
+    department: Optional[str] = None
+    position: Optional[str] = None
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    age: Optional[int] = None
+    sex: Optional[str] = None
+    address: Optional[str] = None
+    location: Optional[str] = None
     license_number: Optional[str] = None
     or_renewal_date: Optional[str] = None
     cr_plate_number: Optional[str] = None
@@ -57,7 +67,9 @@ class UserOut(BaseModel):
     email: str
     face_image_path: str | None = None
     is_active: bool
+    is_activated: bool
     role: str
+    balance: float = 0.0
     created_at: datetime
 
     # Driver documents metadata
@@ -94,3 +106,86 @@ class RefreshRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class UpdateBalanceRequest(BaseModel):
+    amount: float
+
+
+class LoadBalanceGcashQrRequest(BaseModel):
+    amount: float
+    reference_number: str
+    payment_method: Optional[str] = "gcash"
+
+
+class EmployeeCreate(BaseModel):
+    username: str
+    password: str
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
+    age: int
+    sex: str
+    email: EmailStr
+    address: str
+    department: str
+    position: str
+    location: str
+
+
+class EmployeeOut(BaseModel):
+    id: int
+    username: Optional[str] = None
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: str
+    age: int
+    sex: str
+    email: str
+    address: str
+    department: str
+    position: str
+    location: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class FixTopUpReferenceRequest(BaseModel):
+    system_ref: str
+    new_reference_number: str
+
+
+class RolePermissionSave(BaseModel):
+    role: str
+    menu_access: dict[str, bool]
+
+
+class RolePermissionOut(BaseModel):
+    id: int
+    role: str
+    menu_access: dict[str, bool]
+    updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class CreateSupportTicket(BaseModel):
+    user_name: str
+    user_role: Optional[str] = "Passenger"
+    topic: Optional[str] = "General Support"
+    message: str
+    user_id: Optional[int] = None
+
+
+class SendSupportMessage(BaseModel):
+    sender_type: str  # user or agent
+    sender_name: str
+    text: str
+
+
+class ClaimSupportTicket(BaseModel):
+    agent_name: str
+
+
+

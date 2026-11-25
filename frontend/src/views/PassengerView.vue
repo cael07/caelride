@@ -75,6 +75,19 @@
                 </div>
                 <div class="ride-price">₱ {{ ridePrice }}</div>
               </div>
+
+              <!-- Disabled Car Taxi Card -->
+              <div class="ride-option disabled">
+                <div class="ride-icon">🚗</div>
+                <div class="ride-details">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <h4 style="margin: 0;">Car Taxi</h4>
+                    <span style="font-size: 0.65rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 1px 6px; border-radius: 10px; font-weight: 700; text-transform: uppercase;">Disabled</span>
+                  </div>
+                  <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">4-Seater Premium Car (Unavailable)</p>
+                </div>
+                <div class="ride-price" style="opacity: 0.6; font-size: 0.88rem; color: #94a3b8;">Unavailable</div>
+              </div>
             </div>
 
             <button 
@@ -126,16 +139,123 @@
                 </div>
               </div>
             </div>
+
+            <!-- From & To Route Card -->
+            <div v-if="['accepted','arrived','started'].includes(rideStore.currentBooking.status)" class="route-details-card inline-route mb-3">
+              <div class="route-point-inline">
+                <span class="route-icon">👤</span>
+                <div class="route-inline-text">
+                  <span class="route-inline-label">From:</span>
+                  <span class="route-inline-val">{{ rideStore.currentBooking.pickup_address || addressNames[rideStore.currentBooking.id]?.pickup || (rideStore.currentBooking.pickup_lat + ', ' + rideStore.currentBooking.pickup_lng) }}</span>
+                </div>
+              </div>
+
+              <div class="route-point-inline">
+                <span class="route-icon">📍</span>
+                <div class="route-inline-text">
+                  <span class="route-inline-label">To:</span>
+                  <span class="route-inline-val">{{ rideStore.currentBooking.dropoff_address || addressNames[rideStore.currentBooking.id]?.dropoff || (rideStore.currentBooking.dropoff_lat + ', ' + rideStore.currentBooking.dropoff_lng) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Chat & Call Action Buttons ── -->
+            <div class="comm-actions">
+              <button class="comm-btn chat-btn" @click="rideStore.chatOpen = !rideStore.chatOpen">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                Chat
+                <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
+              </button>
+              <button
+                v-if="!rideStore.callActive"
+                class="comm-btn call-btn"
+                @click="rideStore.initiateCall(rideStore.currentBooking.driver_id)"
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+                Call Driver
+              </button>
+              <div v-else class="active-call-bar">
+                <span class="call-live-dot"></span>
+                <span>Call Live</span>
+                <button class="mute-btn" @click="rideStore.toggleMute()">
+                  {{ rideStore.callMuted ? '🔇' : '🎙️' }}
+                </button>
+                <button class="end-call-btn" @click="rideStore.endCall(rideStore.currentBooking.driver_id)">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+                  End
+                </button>
+              </div>
+            </div>
+
             <button class="btn-secondary mt-3 w-100" @click="cancelRide">Cancel Ride</button>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- ── Hidden audio element for WebRTC remote stream ── -->
+  <audio id="remote-audio" autoplay playsinline style="display:none"></audio>
+
+  <!-- ── Incoming Call Modal ── -->
+  <Transition name="call-pop">
+    <div v-if="rideStore.incomingCall" class="call-modal-overlay">
+      <div class="call-modal glass">
+        <div class="call-ring-icon">📞</div>
+        <h3>Incoming Call</h3>
+        <p>{{ rideStore.currentBooking?.driver_name || 'Driver' }} is calling you</p>
+        <div class="call-modal-actions">
+          <button class="accept-call-btn" @click="rideStore.acceptCall(rideStore.currentBooking?.driver_id)">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+            Accept
+          </button>
+          <button class="decline-call-btn" @click="rideStore.incomingCall = false; rideStore._pendingOffer = null">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+            Decline
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- ── Chat Drawer ── -->
+  <Transition name="slide-up">
+    <div v-if="rideStore.chatOpen" class="chat-drawer glass">
+      <div class="chat-header">
+        <span>💬 Chat with {{ rideStore.currentBooking?.driver_name || 'Driver' }}</span>
+        <button class="chat-close-btn" @click="rideStore.chatOpen = false; unreadCount = 0">✕</button>
+      </div>
+      <div class="chat-messages" ref="chatBox">
+        <div v-if="rideStore.chatMessages.length === 0" class="chat-empty">
+          <p>No messages yet. Say hello! 👋</p>
+        </div>
+        <div
+          v-for="(msg, i) in rideStore.chatMessages"
+          :key="i"
+          :class="['chat-bubble', msg.sender === 'me' ? 'bubble-me' : 'bubble-other']"
+        >
+          <span class="bubble-text">{{ msg.text }}</span>
+          <span class="bubble-time">{{ msg.time }}</span>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <input
+          v-model="chatInput"
+          class="chat-input"
+          placeholder="Type a message..."
+          @keydown.enter.prevent="sendChat"
+          maxlength="500"
+        />
+        <button class="chat-send-btn" @click="sendChat" :disabled="!chatInput.trim()">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import L from 'leaflet'
 import { useRideStore } from '../stores/ride'
 import { useAuthStore } from '../stores/auth'
@@ -162,6 +282,42 @@ const suggestions = ref([])
 let searchTimeout = null
 const deviceLocation = ref(null)
 const isSheetExpanded = ref(false)
+const addressNames = ref({})
+
+const resolveAddress = async (lat, lng) => {
+  if (!lat || !lng) return ''
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+    const data = await res.json()
+    return data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+  } catch (e) {
+    return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+  }
+}
+
+watch(() => rideStore.currentBooking, async (b) => {
+  if (b) {
+    const p = b.pickup_address || await resolveAddress(b.pickup_lat, b.pickup_lng)
+    const d = b.dropoff_address || await resolveAddress(b.dropoff_lat, b.dropoff_lng)
+    addressNames.value[b.id] = { pickup: p, dropoff: d }
+  }
+}, { immediate: true, deep: true })
+
+// Chat & Call refs
+const chatInput = ref('')
+const unreadCount = ref(0)
+const chatBox = ref(null)
+
+function sendChat() {
+  const text = chatInput.value.trim()
+  if (!text || !rideStore.currentBooking?.driver_id) return
+  rideStore.sendChatMessage(text, rideStore.currentBooking.driver_id)
+  chatInput.value = ''
+  // Scroll to bottom
+  nextTick(() => {
+    if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight
+  })
+}
 
 let lastGeocodeTime = { pickup: 0, dropoff: 0 }
 
@@ -292,8 +448,8 @@ onMounted(async () => {
   // Initialize map fullscreen
   map = L.map('passenger-map', { zoomControl: false }).setView([pickup.value.lat, pickup.value.lng], 15)
   
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    attribution: '&copy; Google Maps'
   }).addTo(map)
 
   // If there's an active booking, set the map and markers
@@ -414,7 +570,14 @@ const centerOnUser = () => {
 
 const requestRide = async () => {
   if (!dropoff.value) return
-  await rideStore.createBooking(pickup.value.lat, pickup.value.lng, dropoff.value.lat, dropoff.value.lng)
+  await rideStore.createBooking(
+    pickup.value.lat,
+    pickup.value.lng,
+    dropoff.value.lat,
+    dropoff.value.lng,
+    pickupText.value || 'Current Location',
+    dropoffText.value || 'Tap Map Dropoff'
+  )
   
   // Center map to show both markers
   const bounds = L.latLngBounds([pickup.value.lat, pickup.value.lng], [dropoff.value.lat, dropoff.value.lng])
@@ -449,6 +612,11 @@ watch(() => rideStore.currentBooking, (newVal, oldVal) => {
     if (oldVal.status !== 'completed' && oldVal.status !== 'cancelled') {
        alert("Ride has been cancelled.")
     }
+
+    // Clean up chat & call state
+    rideStore._cleanupCall()
+    rideStore.chatMessages = []
+    rideStore.chatOpen = false
   } else if (newVal && oldVal && newVal.status !== oldVal.status) {
     // Status changed
     if (newVal.status === 'accepted' || newVal.status === 'arrived') {
@@ -975,4 +1143,314 @@ watch(() => rideStore.driverLocation, async (newLoc) => {
   animation: spin 1s linear infinite;
 }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ── Comm Action Buttons ─────────────────────────── */
+.comm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.comm-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.comm-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.15); }
+.chat-btn {
+  background: linear-gradient(135deg, #4f8ef7, #6c63ff);
+  color: white;
+}
+.call-btn {
+  background: linear-gradient(135deg, #00c48c, #00a878);
+  color: white;
+}
+.unread-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #ff4757;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* ── Active Call Bar ─────────────────────────────── */
+.active-call-bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #ff4757, #c0392b);
+  color: white;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.call-live-dot {
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border-radius: 50%;
+  animation: live-pulse 1.2s infinite;
+  flex-shrink: 0;
+}
+@keyframes live-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.4); } }
+.mute-btn, .end-call-btn {
+  background: rgba(255,255,255,0.25);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-weight: 600;
+}
+.mute-btn { margin-left: auto; }
+.end-call-btn { background: rgba(0,0,0,0.3); }
+
+/* ── From & To Inline Route Card ── */
+.route-details-card.inline-route {
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+.route-point-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.route-icon {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+.route-inline-text {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: wrap;
+  font-size: 0.84rem;
+}
+.route-inline-label {
+  font-weight: 700;
+  color: #64748b;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.route-inline-val {
+  font-weight: 600;
+  color: #1e293b;
+  word-break: break-word;
+}
+
+/* ── Call Modal Overlay ──────────────────────────── */
+.call-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(6px);
+}
+.call-modal {
+  background: linear-gradient(145deg, #1a1a2e, #16213e);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 28px;
+  padding: 40px 32px 32px;
+  text-align: center;
+  color: white;
+  width: 300px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.5);
+}
+.call-ring-icon {
+  font-size: 3.5rem;
+  animation: ring-shake 0.6s infinite alternate;
+  margin-bottom: 16px;
+}
+@keyframes ring-shake { 0% { transform: rotate(-12deg); } 100% { transform: rotate(12deg); } }
+.call-modal h3 { font-size: 1.3rem; margin: 0 0 6px; }
+.call-modal p { font-size: 0.9rem; opacity: 0.75; margin: 0 0 24px; }
+.call-modal-actions { display: flex; gap: 14px; }
+.accept-call-btn, .decline-call-btn {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  padding: 14px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: transform 0.15s;
+}
+.accept-call-btn:hover, .decline-call-btn:hover { transform: scale(1.04); }
+.accept-call-btn { background: linear-gradient(135deg, #00c48c, #00a878); color: white; }
+.decline-call-btn { background: linear-gradient(135deg, #ff4757, #c0392b); color: white; }
+
+/* ── Call-pop Transition ─────────────────────────── */
+.call-pop-enter-active { animation: pop-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.call-pop-leave-active { animation: pop-out 0.2s ease-in; }
+@keyframes pop-in { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes pop-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.7); } }
+
+/* ── Chat Drawer ─────────────────────────────────── */
+.chat-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 68vh;
+  background: linear-gradient(160deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 24px 24px 0 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 8888;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.45);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.chat-close-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.chat-close-btn:hover { background: rgba(255,255,255,0.2); }
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+.chat-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.9rem;
+}
+.chat-bubble {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+.bubble-me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.bubble-other {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+.bubble-text {
+  background: rgba(255,255,255,0.1);
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px;
+  color: white;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.bubble-me .bubble-text {
+  background: linear-gradient(135deg, #4f8ef7, #6c63ff);
+  border-radius: 16px 16px 4px 16px;
+}
+.bubble-time {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.35);
+  margin-top: 3px;
+  padding: 0 4px;
+}
+.chat-input-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.chat-input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 11px 16px;
+  color: white;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.chat-input::placeholder { color: rgba(255,255,255,0.35); }
+.chat-input:focus { border-color: rgba(79,142,247,0.7); }
+.chat-send-btn {
+  background: linear-gradient(135deg, #4f8ef7, #6c63ff);
+  border: none;
+  border-radius: 14px;
+  width: 46px;
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.chat-send-btn:hover { transform: scale(1.08); }
+.chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ── Slide-up Transition ─────────────────────────── */
+.slide-up-enter-active { transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s; }
+.slide-up-leave-active { transition: transform 0.22s ease-in, opacity 0.2s; }
+.slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); opacity: 0; }
 </style>

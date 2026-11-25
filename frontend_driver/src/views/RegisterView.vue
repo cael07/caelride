@@ -94,15 +94,15 @@
               
               <div class="form-group">
                 <label class="form-label">License Number</label>
-                <input v-model="licenseNumber" ref="licenseNumberInput" type="text" class="form-input" placeholder="e.g. J0123456789" />
+                <input v-model="licenseNumber" ref="licenseNumberInput" type="text" class="form-input" placeholder="Enter Driver License No." />
               </div>
               <div class="form-group">
                 <label class="form-label">Full Name</label>
-                <input v-model="licenseName" type="text" class="form-input" placeholder="e.g. JUAN DELA CRUZ" disabled />
+                <input v-model="licenseName" type="text" class="form-input" placeholder="e.g. JUAN DELA CRUZ" />
               </div>
               <div class="form-group">
                 <label class="form-label">Expiry Date</label>
-                <input v-model="licenseExpiry" type="text" class="form-input" placeholder="e.g. YYYY-MM-DD" disabled />
+                <input v-model="licenseExpiry" type="date" class="form-input" />
               </div>
             </div>
 
@@ -159,7 +159,7 @@
               
               <div class="form-group">
                 <label class="form-label">OR Renewal Date</label>
-                <input v-model="orRenewalDate" type="text" class="form-input" placeholder="e.g. YYYY-MM-DD" readonly />
+                <input v-model="orRenewalDate" type="date" class="form-input" />
               </div>
             </div>
 
@@ -217,32 +217,32 @@
               <div class="form-row-2">
                 <div class="form-group">
                   <label class="form-label">Plate Number</label>
-                  <input v-model="crPlate" type="text" class="form-input" placeholder="e.g. NDG 4819" readonly />
+                  <input v-model="crPlate" type="text" class="form-input" placeholder="e.g. NDG 4819" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Brand</label>
-                  <input v-model="crBrand" type="text" class="form-input" placeholder="e.g. YAMAHA" readonly />
+                  <input v-model="crBrand" type="text" class="form-input" placeholder="e.g. YAMAHA" />
                 </div>
               </div>
               <div class="form-row-2">
                 <div class="form-group">
                   <label class="form-label">Color</label>
-                  <input v-model="crColor" type="text" class="form-input" placeholder="e.g. BLACK" readonly />
+                  <input v-model="crColor" type="text" class="form-input" placeholder="e.g. BLACK" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Year</label>
-                  <input v-model="crYear" type="text" class="form-input" placeholder="e.g. 2019" readonly />
+                  <input v-model="crYear" type="text" class="form-input" placeholder="e.g. 2019" />
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label">Owner's Name</label>
-                <input v-model="crOwnerName" type="text" class="form-input" placeholder="e.g. JUAN DELA CRUZ" readonly />
+                <input v-model="crOwnerName" type="text" class="form-input" placeholder="e.g. JUAN DELA CRUZ" />
               </div>
             </div>
 
             <div class="btn-row">
               <button class="btn btn-ghost btn-retake" @click="crImage = null">↶ Retake</button>
-              <button class="btn btn-success" :disabled="!crPlate || !crBrand || !crOwnerName" @click="confirmDocStep(5)">{{ retakeTarget === 4 ? '✓ Confirm & Return' : 'Next Step ➔' }}</button>
+              <button class="btn btn-success" :disabled="isCrStepIncomplete" @click="confirmDocStep(5)">{{ retakeTarget === 4 ? '✓ Confirm & Return' : 'Next Step ➔' }}</button>
             </div>
           </div>
         </div>
@@ -276,54 +276,70 @@
         <RouterLink to="/login">Sign in</RouterLink>
       </div>
     </div>
-  </div>
 
-  <!-- Fullscreen Document Scanner Modal -->
-  <Transition name="fade">
-    <div v-if="showCameraModal" class="camera-modal-overlay">
-      <!-- Camera Flash effect -->
-      <div v-if="captureFlash" class="camera-flash"></div>
+    <!-- Fullscreen Document Scanner Modal -->
+    <Transition name="fade">
+      <div v-if="showCameraModal" class="camera-modal-overlay">
+        <!-- Camera Flash effect -->
+        <div v-if="captureFlash" class="camera-flash"></div>
 
-      <div class="camera-modal-content">
-        <!-- Header -->
-        <div class="camera-modal-header">
-          <h3 class="camera-modal-title">Position Your Document</h3>
-          <button class="camera-modal-close" @click="closeCameraModal">✕</button>
-        </div>
+        <div class="camera-modal-content">
+          <!-- Header -->
+          <div class="camera-modal-header">
+            <h3 class="camera-modal-title">Position Your Document</h3>
+            <button class="camera-modal-close" @click="closeCameraModal">✕</button>
+          </div>
 
-        <!-- Viewfinder -->
-        <div class="camera-modal-viewfinder">
-          <video ref="modalVideoEl" class="modal-video" autoplay muted playsinline></video>
+          <!-- Viewfinder -->
+          <div class="camera-modal-viewfinder">
+            <video ref="modalVideoEl" class="modal-video" autoplay muted playsinline></video>
 
-          <!-- Guideline rect & hint: hide for OR/CR to allow full-screen capture of large documents -->
-          <template v-if="!(['or','cr'].includes(activeCaptureType))">
-            <div class="camera-modal-guideline">
-              <div class="camera-modal-guideline-rect" :class="{ aligned: docAligned }">
-                <span class="guideline-text">
-                  {{ docAligned ? '✓ DOCUMENT DETECTED' : 'ALIGN DOCUMENT EDGES' }}
-                </span>
+            <!-- Guideline rect & hint: hide for OR/CR to allow full-screen capture of large documents -->
+            <template v-if="!(['or','cr'].includes(activeCaptureType))">
+              <div class="camera-modal-guideline">
+                <div class="camera-modal-guideline-rect" :class="{ aligned: docAligned }">
+                  <span class="guideline-text">
+                    {{ docAligned ? '✓ DOCUMENT DETECTED' : 'ALIGN DOCUMENT EDGES' }}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <!-- Hint bar inside viewfinder -->
-            <div class="doc-hint-bar" :class="{ aligned: docAligned }">
-              <span v-if="docCountdown > 0">📸 Hold still…</span>
-              <span v-else-if="docAligned">✅ Document detected — hold steady</span>
-              <span v-else>📄 Fit the document inside the frame</span>
-            </div>
-          </template>
-        </div>
+              <!-- Hint bar inside viewfinder -->
+              <div class="doc-hint-bar" :class="{ aligned: docAligned }">
+                <span v-if="docCountdown > 0">📸 Hold still…</span>
+                <span v-else-if="docAligned">✅ Document detected — hold steady</span>
+                <span v-else>📄 Fit the document inside the frame</span>
+              </div>
+            </template>
+          </div>
 
-        <!-- Footer Controls -->
-        <div class="camera-modal-controls">
-          <button class="btn btn-ghost modal-btn-cancel" @click="closeCameraModal">Cancel</button>
-          <button class="btn btn-primary modal-btn-capture" @click="triggerDocCapture">
-            📸 Capture Now
-          </button>
+          <!-- Footer Controls -->
+          <div class="camera-modal-controls">
+            <button class="btn btn-ghost modal-btn-cancel" @click="closeCameraModal">Cancel</button>
+            <button class="btn btn-primary modal-btn-capture" @click="triggerDocCapture">
+              📸 Capture Now
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+
+    <!-- Custom Error Alert Modal -->
+    <Transition name="fade">
+      <div v-if="showErrorModal" class="custom-alert-overlay" @click.self="showErrorModal = false">
+        <div class="custom-alert-card animate-pop">
+          <div class="alert-icon-container error">
+            <span class="alert-emoji">⚠️</span>
+          </div>
+          <h3 class="alert-title">Registration Failed</h3>
+          <p class="alert-message">
+            {{ modalErrorMsg }}
+          </p>
+          <button class="alert-dismiss-btn" @click="showErrorModal = false">Dismiss</button>
+        </div>
+      </div>
+    </Transition>
+  </div>
 </template>
 
 <script setup>
@@ -342,6 +358,8 @@ const step      = ref(1)
 const faceImage = ref(null)
 const loading   = ref(false)
 const error     = ref('')
+const showErrorModal = ref(false)
+const modalErrorMsg = ref('')
 
 // Camera states and refs
 const activeMode = ref('upload')
@@ -627,6 +645,10 @@ const isOrExpired = computed(() => {
   return isDateBeforeToday(orRenewalDate.value)
 })
 
+const isCrStepIncomplete = computed(() => {
+  return !crPlate.value || !crBrand.value || !crColor.value || !crYear.value || !crOwnerName.value
+})
+
 function isDateBeforeToday(dateStr) {
   if (!dateStr) return false
   const parts = dateStr.split('-')
@@ -643,8 +665,8 @@ function isDateBeforeToday(dateStr) {
 function verifyDocumentText(text, docType) {
   const upper = text.toUpperCase()
   if (docType === 'license') {
-    // Just check if DRIVER or LICENSE or REPUBLIC exists anywhere in text (very relaxed regex to tolerate OCR typos)
-    return /\b(DRIV|LIC|L1C|DR1V|REPUBL|PILIP)/i.test(text)
+    // Check if the document contains keywords specific to a Driver's License (DRIVER, LICENSE, LICENCE, LTO, TRANSPORTATION)
+    return /\b(DRIVER|LICENSE|LICENCE|LTO|TRANSPORTATION)\b/i.test(text) || /\bDRIV/i.test(text)
   } else if (docType === 'or') {
     // Official Receipt should include RECEIPT and at least one business/receipt indicator,
     // but must not contain REGISTRATION as that indicates a CR/registration document.
@@ -656,10 +678,18 @@ function verifyDocumentText(text, docType) {
     const hasRegistration = upper.includes('REGISTRATION')
     return hasReceipt && (hasOfficial || hasPayment || hasMvuc || hasCashier) && !hasRegistration
   } else if (docType === 'cr') {
-    // Certificate of Registration must explicitly include both 'CERTIFICATE' and 'REGISTRATION'
+    // OCR-safe CR validation: accept strong partials so valid CR images are not rejected.
     const hasRegistration = upper.includes('REGISTRATION')
     const hasCertificate = upper.includes('CERTIFICATE')
-    return hasRegistration && hasCertificate
+    const hasPartialReg = /REGI?ST|REGIS|REGISTR/i.test(upper)
+    const hasPartialCert = /CERTI?|CERTIF|CER?T/i.test(upper)
+    const hasLto = upper.includes('LAND TRANSPORTATION OFFICE') || /\bLTO\b/.test(upper)
+    const hasPlateLabel = /\bPLATE\s*NO\b/i.test(upper)
+    const hasOwnerLabel = /\bOWNER'?S?\s*NAME\b/i.test(upper)
+    return (hasRegistration && hasCertificate) ||
+           (hasPartialReg && hasPartialCert) ||
+           ((hasRegistration || hasCertificate) && hasLto) ||
+           (hasLto && (hasPlateLabel || hasOwnerLabel))
   }
   return true
 }
@@ -998,9 +1028,72 @@ async function runOCR(fileBase64, docType) {
   error.value = ''
 
   try {
-    const ocrBase64 = docType === 'cr' ? await preprocessDocumentImage(fileBase64) : fileBase64
+    if (docType === 'cr') {
+      ocrStatus.value = 'Reading CR on server...'
+      let res
+      let json
+      try {
+        res = await fetch('http://127.0.0.1:8000/api/ocr/parse_cr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: fileBase64 })
+        })
+        json = await res.json()
+      } catch (e) {
+        throw new Error(`Could not reach CR parser backend: ${e && e.message ? e.message : String(e)}`)
+      }
 
-    // All documents use Tesseract only; RapidOCR has been removed.
+      if (!res.ok || !json || !json.ok || !json.parsed) {
+        throw new Error((json && json.error) ? json.error : `CR parser request failed (HTTP ${res ? res.status : 'unknown'})`)
+      }
+
+      const parsed = json.parsed || {}
+      crPlate.value = (parsed.cr_plate_number || '').toUpperCase().trim()
+      crBrand.value = (parsed.cr_brand || '').toUpperCase().trim()
+      crColor.value = (parsed.cr_color || '').toUpperCase().trim()
+      crYear.value = parsed.cr_year ? String(parsed.cr_year).trim() : ''
+      crOwnerName.value = (parsed.cr_owner_name || '').toUpperCase().replace(/\s+/g, ' ').trim()
+      crModel.value = ''
+      return
+    }
+
+    if (docType === 'license') {
+      ocrStatus.value = 'Reading Driver License on server...'
+      let res
+      let json
+      try {
+        res = await fetch('http://127.0.0.1:8000/api/ocr/easyocr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: fileBase64 })
+        })
+        json = await res.json()
+      } catch (e) {
+        throw new Error(`Could not reach license OCR backend: ${e && e.message ? e.message : String(e)}`)
+      }
+
+      if (!res.ok || !json || !json.ok || !Array.isArray(json.words)) {
+        throw new Error((json && json.error) ? json.error : `License OCR request failed (HTTP ${res ? res.status : 'unknown'})`)
+      }
+
+      const text = json.words.map(w => w.text || '').join('\n')
+      console.log('Server OCR parsed text for license:', text)
+
+      const isValid = verifyDocumentText(text, docType)
+      if (!isValid) {
+        licenseImage.value = null
+        error.value = 'Error, Incorrect Document or Blurry, failed to read properly, please check and capture it clearly.'
+        return
+      }
+
+      ocrStatus.value = 'Extracting fields...'
+      parseOCRText(text, docType)
+      return
+    }
+
+    const ocrBase64 = fileBase64
+
+    // All remaining documents use local Tesseract; license OCR is now server-side.
     const Tesseract = await loadTesseract()
     const worker = await Tesseract.createWorker('eng')
     try {
@@ -1129,8 +1222,7 @@ function parseOCRText(text, docType) {
       }
     }
 
-    // Always leave license number blank so user is forced to input it manually
-    licenseNumber.value = ''
+    licenseNumber.value = licNo || ''
     
     // 2. Full Name Parsing
     // The ID label row is "Last Name, First Name, Middle Name" (small text).
@@ -1236,143 +1328,171 @@ function parseOCRText(text, docType) {
   else if (docType === 'cr') {
     const linesRaw = text.split('\n').map(l => l.trim())
     const upperLines = linesRaw.map(l => l.toUpperCase())
-    const rawUpper = text.toUpperCase()
+    const KNOWN_BRANDS = ['HONDA', 'YAMAHA', 'SUZUKI', 'KAWASAKI', 'TOYOTA', 'NISSAN', 'ISUZU', 'MITSUBISHI', 'MAZDA', 'HYUNDAI', 'KIA', 'FORD', 'CHEVROLET', 'HINO']
+    const KNOWN_COLORS = ['BLACK', 'WHITE', 'RED', 'BLUE', 'GREEN', 'YELLOW', 'BROWN', 'SILVER', 'GRAY', 'GREY', 'ORANGE', 'GOLD', 'MAROON', 'BEIGE']
+    const LABEL_BREAK = /\b(PLATE|ENGINE|CHASSIS|FILE|OWNER|COLOR|YEAR|MODEL|MAKE|BRAND|TYPE|SERIES|CLASSIFICATION|GROSS|PISTON|BODY|PASSENGER|CERTIFICATE|REGISTRATION)\b/i
 
-    function extractField(labels, rejectGeneric = false) {
-      const upperLabels = labels.map(l => l.toUpperCase())
-      const genericTokens = /\b(VEHICLE|MOTOR|TYPE|CATEGORY|WITHOUT|SIDE|CAR|FUEL|ENGINE|CHASSIS|FILE|MODEL|YEAR|MAKE|BRAND|OWNER|REGISTERED|CERTIFICATE|REGISTRATION|OFFICIAL|DEPARTMENT|TRANSPORTATION)\b/i
+    function normalizeOCRLine(line) {
+      return line.toUpperCase().replace(/[^A-Z0-9/\s.-]/g, ' ')
+    }
 
-      for (let i = 0; i < upperLines.length; i++) {
-        const upper = upperLines[i]
-        for (const label of upperLabels) {
-          const idx = upper.indexOf(label)
-          if (idx !== -1) {
-            let value = linesRaw[i].slice(idx + label.length).trim()
-            value = value.replace(/^[:\-\.\s]+/, '').trim()
-            if (value && !upperLabels.some(l => value.toUpperCase().includes(l))) {
-              if (!rejectGeneric || !genericTokens.test(value)) {
-                return value
-              }
-            }
-            const next = linesRaw[i + 1] ? linesRaw[i + 1].trim() : ''
-            if (next && !upperLabels.some(l => next.toUpperCase().includes(l))) {
-              if (!rejectGeneric || !genericTokens.test(next)) {
-                return next
-              }
-            }
-          }
+    function lineWindow(idx, before = 0, after = 1) {
+      if (idx < 0) return []
+      const start = Math.max(0, idx - before)
+      const end = Math.min(linesRaw.length, idx + after + 1)
+      return linesRaw.slice(start, end)
+    }
+
+    function normalizeAlphaOCR(s) {
+      return (s || '')
+        .toUpperCase()
+        .replace(/0/g, 'O')
+        .replace(/1/g, 'I')
+        .replace(/2/g, 'Z')
+        .replace(/5/g, 'S')
+        .replace(/6/g, 'G')
+        .replace(/8/g, 'B')
+    }
+
+    function toDigit(ch) {
+      if (/\d/.test(ch)) return ch
+      const map = { O: '0', Q: '0', D: '0', I: '1', L: '1', Z: '2', S: '5', B: '8', G: '6', A: '4', T: '7' }
+      return map[ch] || ''
+    }
+
+    function toAlpha(ch) {
+      if (/[A-Z]/.test(ch)) return ch
+      const map = { '0': 'O', '1': 'I', '2': 'Z', '4': 'A', '5': 'S', '6': 'G', '7': 'T', '8': 'B' }
+      return map[ch] || ''
+    }
+
+    function fitPattern(raw, pattern) {
+      if (!raw || raw.length !== pattern.length) return ''
+      let out = ''
+      for (let i = 0; i < pattern.length; i++) {
+        const ch = raw[i].toUpperCase()
+        if (pattern[i] === 'A') {
+          const a = toAlpha(ch)
+          if (!a) return ''
+          out += a
+        } else {
+          const d = toDigit(ch)
+          if (!d) return ''
+          out += d
         }
+      }
+      return out
+    }
+
+    function normalizePlateCandidate(candidate) {
+      const cleaned = (candidate || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+      if (cleaned.length < 5 || cleaned.length > 8) return ''
+      const patterns = ['A999AA', 'AAA9999', '999AAA', '999AAAA', 'AA9999', 'AA99999']
+      for (const p of patterns) {
+        const fitted = fitPattern(cleaned, p)
+        if (fitted) return fitted
       }
       return ''
     }
 
-    const plateRaw = extractField(['PLATE NO', 'PLATE NO.', 'PLATE NUMBER', 'PLATE'], true)
+    function extractSegment(flatText, labelRegex, stopRegex) {
+      const m = flatText.match(labelRegex)
+      if (!m) return ''
+      const start = m.index + m[0].length
+      const rest = flatText.slice(start)
+      const stop = rest.search(stopRegex)
+      return (stop >= 0 ? rest.slice(0, stop) : rest).trim()
+    }
+
+    const flat = linesRaw.join(' ').replace(/\s+/g, ' ').toUpperCase()
+
+    // 1) Plate number: label-anchored + OCR-tolerant normalization
+    const plateIdx = upperLines.findIndex(l => /\bPLATE\b/.test(l))
+    const plateSeg = extractSegment(flat, /\bPLATE\s*NO\.?\b/, /\b(ENGINE|CHASSIS|VIN|FILE|VEHICLE|PASSENGER|BODY|COLOR|YEAR|OWNER)\b/)
+    const plateTokens = []
+    if (plateSeg) plateTokens.push(...plateSeg.split(/\s+/))
+    if (plateIdx !== -1) plateTokens.push(...lineWindow(plateIdx, 0, 2).map(normalizeOCRLine).join(' ').split(/\s+/))
     let plate = ''
-    if (plateRaw) {
-      const normalized = plateRaw.toUpperCase().replace(/[^A-Z0-9]/g, ' ')
-      const candidates = [...normalized.matchAll(/\b([A-Z]{1,3}\d{2,4}[A-Z]{1,3})\b/g)]
-        .map(m => m[1])
-        .filter(c => c.length >= 5 && c.length <= 7)
-      if (candidates.length) {
-        plate = candidates.sort((a, b) => a.length - b.length)[0]
-      } else {
-        const fallback = normalized.replace(/\s+/g, '').match(/^[A-Z]{1,3}\d{2,4}[A-Z]{1,3}/)
-        plate = fallback ? fallback[0] : ''
+    for (const tok of plateTokens) {
+      const p = normalizePlateCandidate(tok)
+      if (p) {
+        plate = p
+        break
       }
     }
     crPlate.value = plate
 
-    const KNOWN_BRANDS = ['HONDA', 'YAMAHA', 'SUZUKI', 'KAWASAKI', 'TOYOTA', 'NISSAN', 'ISUZU', 'MITSUBISHI', 'MAZDA', 'HYUNDAI', 'KIA', 'FORD', 'CHEVROLET', 'HINO']
-    function matchKnownBrand() {
-      for (const brand of KNOWN_BRANDS) {
-        if (rawUpper.includes(brand)) {
-          return brand
-        }
-      }
-      return ''
-    }
+    // 2) Brand: exact known brand token from MAKE/BRAND area only
+    const brandIdx = upperLines.findIndex(l => /\bMAKE\b|\bBRAND\b/.test(l))
+    const brandSeg = extractSegment(flat, /\bMAKE\s*\/?\s*BRAND\b/, /\b(CLASSIFICATION|TYPE|COLOR|YEAR|OWNER|PLATE)\b/)
+    const brandWindow = (lineWindow(brandIdx, 0, 2).map(normalizeOCRLine).join(' ') + ' ' + brandSeg).trim()
+    const brandNorm = normalizeAlphaOCR(brandWindow)
+    const matchedBrand = KNOWN_BRANDS.find(b => new RegExp(`\\b${b}\\b`, 'i').test(brandNorm))
+    crBrand.value = matchedBrand || ''
 
-    const brandRaw = extractField(['MAKE/BRAND', 'MAKE', 'BRAND'], true)
-    const brandCand = brandRaw.toUpperCase().replace(/[^A-Z\s]/g, ' ').trim()
-    const knownBrand = KNOWN_BRANDS.find(b => brandCand.includes(b)) || matchKnownBrand()
-    crBrand.value = knownBrand || brandCand || ''
+    // 3) Color: exact known color token from COLOR area only
+    const colorIdx = upperLines.findIndex(l => /\bCOLOR\b/.test(l))
+    const colorSeg = extractSegment(flat, /\bCOLOR\b/, /\b(TYPE|FUEL|CLASSIFICATION|YEAR|OWNER|SERIES|BODY)\b/)
+    const colorWindow = (lineWindow(colorIdx, 0, 2).map(normalizeOCRLine).join(' ') + ' ' + colorSeg).trim()
+    const colorNorm = normalizeAlphaOCR(colorWindow)
+    const matchedColor = KNOWN_COLORS.find(c => new RegExp(`\\b${c}\\b`, 'i').test(colorNorm))
+    crColor.value = matchedColor || ''
 
-    const KNOWN_COLORS = ['BLACK', 'WHITE', 'RED', 'BLUE', 'GREEN', 'YELLOW', 'BROWN', 'SILVER', 'GRAY', 'GREY', 'ORANGE', 'GOLD', 'MAROON', 'BEIGE']
-    function matchKnownColor() {
-      for (const color of KNOWN_COLORS) {
-        if (rawUpper.includes(color)) {
-          return color
-        }
-      }
-      return ''
-    }
+    // 4) Year + model: constrained to YEAR MODEL and SERIES regions
+    let year = ''
+    const yearIdx = upperLines.findIndex(l => /\bYEAR\b/.test(l) && /\bMODEL\b/.test(l))
+    const yearSeg = extractSegment(flat, /\bYEAR\s*MODEL\b/, /\b(NEW|REBUILT|PISTON|OWNER|SERIES|BODY)\b/)
+    const yearWindow = (lineWindow(yearIdx, 0, 2).map(normalizeOCRLine).join(' ') + ' ' + yearSeg).trim()
+    const yearMatch = yearWindow.match(/\b(19|20)\d{2}\b/)
+    if (yearMatch) year = yearMatch[0]
+    crYear.value = year
 
-    const colorRaw = extractField(['COLOR'], true)
-    const colorCand = colorRaw.toUpperCase().replace(/[^A-Z\s]/g, ' ').trim()
-    const knownColor = KNOWN_COLORS.find(c => colorCand.includes(c)) || matchKnownColor()
-    crColor.value = knownColor || colorCand.split(/\s+/)[0] || ''
-
-    let model = extractField(['YEAR MODEL', 'YEAR MODEL (NEW/USED IMPORTED CBU)'], true)
-    if (!model) {
-      const yearLineIndex = upperLines.findIndex(l => l.includes('YEAR MODEL'))
-      if (yearLineIndex !== -1 && linesRaw[yearLineIndex + 1]) {
-        model = linesRaw[yearLineIndex + 1].trim()
-      }
-    }
-    const yearMatch = model ? model.match(/\b(19|20)\d{2}\b/) : null
-    crYear.value = yearMatch ? yearMatch[0] : ''
-    // Keep `crModel` as the textual model (exclude the year if present)
-    if (model) {
-      crModel.value = model.replace(/\b(19|20)\d{2}\b/, '').trim() || model.trim()
-    } else {
-      crModel.value = ''
-    }
-
-    // Fallback 1: search lines that contain 'YEAR' for an inline year (covers "YEAR MODEL 2026")
-    if (!crYear.value) {
-      for (let i = 0; i < upperLines.length; i++) {
-        if (upperLines[i].includes('YEAR')) {
-          const m = upperLines[i].match(/\b(19|20)\d{2}\b/)
-          if (m) { crYear.value = m[0]; break }
-          const nextLine = linesRaw[i+1] || ''
-          const m2 = nextLine.match(/\b(19|20)\d{2}\b/)
-          if (m2) { crYear.value = m2[0]; break }
+    const seriesIdx = upperLines.findIndex(l => /\bSERIES\b/.test(l))
+    let model = ''
+    if (seriesIdx !== -1) {
+      const sameLine = normalizeOCRLine(linesRaw[seriesIdx] || '')
+        .replace(/\bSERIES\b/gi, '')
+        .replace(/\b(19|20)\d{2}\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (sameLine && !LABEL_BREAK.test(sameLine)) {
+        model = sameLine
+      } else {
+        const nextLine = normalizeOCRLine(linesRaw[seriesIdx + 1] || '')
+        if (nextLine && !LABEL_BREAK.test(nextLine)) {
+          model = nextLine.replace(/\b(19|20)\d{2}\b/g, '').replace(/\s+/g, ' ').trim()
         }
       }
     }
+    crModel.value = model
 
-    // Fallback 2: pick the most plausible year from the whole document (recent year)
-    if (!crYear.value) {
-      const allYears = [...rawUpper.matchAll(/\b(19|20)\d{2}\b/g)].map(m => m[0])
-      if (allYears.length) {
-        const currentYear = new Date().getFullYear()
-        const candidates = allYears
-          .map(y => parseInt(y, 10))
-          .filter(y => y >= 1900 && y <= currentYear + 1)
-        if (candidates.length) {
-          // prefer the maximum plausible year (e.g., 2026)
-          crYear.value = String(Math.max(...candidates))
+    // 5) Owner's name: only from OWNER'S NAME section and immediate continuation
+    let owner = ''
+    const ownerIdx = upperLines.findIndex(l => /\bOWNER\b/.test(l) && /\bNAME\b/.test(l))
+    if (ownerIdx !== -1) {
+      const ownerSeg = extractSegment(
+        flat,
+        /\bOWNER'?S?\s*NAME\b/,
+        /\b(OWNER'?S?\s*ADDRESS|ENCUMBERED|DETAILS|REGISTRANT|REMARKS|PLATE|YEAR|COLOR)\b/
+      )
+      const sameLine = normalizeOCRLine(linesRaw[ownerIdx] || '')
+        .replace(/OWNER'?S?\s+NAME/gi, '')
+        .replace(/[:#-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (sameLine && !LABEL_BREAK.test(sameLine) && sameLine.split(/\s+/).length >= 2) {
+        owner = sameLine
+      } else if (ownerSeg) {
+        owner = ownerSeg.replace(/\s+/g, ' ').trim()
+      } else {
+        const ownerParts = []
+        for (let i = ownerIdx + 1; i <= ownerIdx + 3 && i < linesRaw.length; i++) {
+          const next = normalizeOCRLine(linesRaw[i] || '').replace(/\s+/g, ' ').trim()
+          if (!next || LABEL_BREAK.test(next)) break
+          ownerParts.push(next)
         }
+        owner = ownerParts.join(' ').trim()
       }
-    }
-
-    let owner = extractField(["OWNER'S NAME", "OWNERS NAME", 'OWNER NAME', 'REGISTERED OWNER'], false)
-    if (!owner || owner.split(/\s+/).length < 2 || owner.length < 8) {
-      const ownerIndex = upperLines.findIndex((l, idx) => /OWNER\b/.test(l) && linesRaw[idx + 1])
-      if (ownerIndex !== -1) {
-        for (let j = ownerIndex + 1; j <= ownerIndex + 3 && j < linesRaw.length; j++) {
-          const candidate = linesRaw[j].trim()
-          if (candidate.length > 10 && /\s/.test(candidate) && !/\b(MOTOR|VEHICLE|TYPE|FUEL|MODEL|YEAR|MAKE|BRAND|ENGINE|CHASSIS|FILE|REGISTRATION|CERTIFICATE|OFFICIAL|DEPARTMENT|TRANSPORTATION)\b/i.test(candidate)) {
-            owner = candidate
-            break
-          }
-        }
-      }
-    }
-    if (!owner || owner.split(/\s+/).length < 2 || owner.length < 8) {
-      owner = linesRaw
-        .filter(l => l.length > 10 && /\s/.test(l) && !/\b(MOTOR|VEHICLE|TYPE|FUEL|MODEL|YEAR|MAKE|BRAND|ENGINE|CHASSIS|FILE|REGISTRATION|CERTIFICATE|OFFICIAL|DEPARTMENT|TRANSPORTATION)\b/i.test(l))
-        .sort((a, b) => b.length - a.length)[0] || ''
     }
     crOwnerName.value = owner.replace(/[^A-Z\s\.\,]/gi, ' ').replace(/\s+/g, ' ').trim()
   }
@@ -1442,7 +1562,7 @@ async function handleRegister(formData) {
       cr_plate_number: crPlate.value,
       cr_brand: crBrand.value,
       cr_color: crColor.value,
-      cr_model: crModel.value,
+      cr_model: crModel.value || crYear.value || '',
       cr_year: crYear.value,
       cr_owner_name: crOwnerName.value,
       license_image: licenseImage.value,
@@ -1454,6 +1574,8 @@ async function handleRegister(formData) {
     router.push('/dashboard')
   } catch (e) {
     error.value = e.message || 'Registration failed. Please try again.'
+    modalErrorMsg.value = error.value
+    showErrorModal.value = true
     loading.value = false
   }
 }

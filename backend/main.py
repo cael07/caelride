@@ -9,6 +9,7 @@ import os
 from .database import init_db
 from .auth.router import router as auth_router
 from .ride.router import router as ride_router
+from .ocr import parse_cr_text
 
 
 @asynccontextmanager
@@ -118,7 +119,7 @@ class OcrRequest(BaseModel):
 @app.post("/api/ocr/{engine}")
 def ocr_document(engine: str, payload: OcrRequest):
     engine = (engine or "").lower()
-    if engine != "easyocr":
+    if engine not in ("easyocr", "parse_cr"):
         return JSONResponse({"ok": False, "error": f"unknown OCR engine '{engine}'"}, status_code=400)
 
     data_url = payload.dataUrl or ""
@@ -157,6 +158,12 @@ def ocr_document(engine: str, payload: OcrRequest):
             "x0": min(xs), "x1": max(xs), "y0": min(ys), "y1": max(ys),
             "conf": float(conf),
         })
+
+    # Support CR parsing via /api/ocr/parse_cr even when this dynamic route matches first.
+    if engine == "parse_cr":
+        raw_text = "\n".join([w["text"] for w in words if w.get("text")])
+        parsed = parse_cr_text(raw_text)
+        return {"ok": True, "engine": engine, "text": raw_text, "parsed": parsed}
 
     return {"ok": True, "engine": engine, "words": words,
             "width": img.width, "height": img.height, "count": len(words)}

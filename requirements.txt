@@ -1,1 +1,15 @@
--r backend/requirements.txt
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+pydantic[email]
+pydantic-settings
+python-dotenv
+Pillow
+websockets
+httpx
+numpy
+easyocr

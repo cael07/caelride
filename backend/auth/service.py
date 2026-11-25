@@ -1,13 +1,15 @@
+from __future__ import annotations
 import os
 import base64
 import uuid
 import io
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, func
 from fastapi import HTTPException, status
 from PIL import Image
 
-from .models import User
+import json
+from .models import User, RolePermission
 from .schemas import UserRegister, UserLogin
 from .utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 
@@ -51,12 +53,12 @@ def get_user_by_id(db: Session, user_id: int):
 
 
 def get_user_by_username(db: Session, username: str):
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(func.lower(User.username) == func.lower(username)).first()
     return user
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(func.lower(User.email) == func.lower(email)).first()
 
 
 def register_user(
@@ -80,13 +82,24 @@ def register_user(
     or_b64_compressed      = compress_image_base64(or_image_b64) if or_image_b64 else None
     cr_b64_compressed      = compress_image_base64(cr_image_b64) if cr_image_b64 else None
 
+    # If position is provided or role is an employee position, derive role from position
+    if data.position:
+        role_str = data.position.strip().lower().replace(" ", "_")
+    elif data.role:
+        role_str = data.role.strip().lower().replace(" ", "_") if data.role not in ("passenger", "driver", "admin", "super_admin") else data.role
+    else:
+        role_str = "passenger"
+
+    is_auto_activated = role_str in ("passenger", "admin", "super_admin") or role_str not in ("passenger", "driver")
     user = User(
         full_name=data.full_name,
         username=data.username,
         email=data.email,
         password_hash=hash_password(data.password),
         face_image_path=None,    # No longer saving to disk; path unused on Render
-        role=data.role if data.role else "passenger",
+        role=role_str,
+        is_active=True,
+        is_activated=is_auto_activated,
 
         # Base64 images stored directly in DB (persists on Render PostgreSQL)
         face_image_b64_db=face_b64_compressed,
@@ -108,6 +121,27 @@ def register_user(
         cr_image_b64_db=cr_b64_compressed if data.role == "driver" else None,
     )
     db.add(user)
+
+    # If employee info is provided, create Employee record as well
+    if data.department and data.position:
+        from .models import Employee
+        first_n = data.first_name or (data.full_name.split()[0] if data.full_name else data.username)
+        last_n = data.last_name or (data.full_name.split()[-1] if len(data.full_name.split()) > 1 else "Employee")
+        emp = Employee(
+            username=data.username,
+            first_name=first_n,
+            middle_name=data.middle_name,
+            last_name=last_n,
+            age=data.age or 25,
+            sex=data.sex or "Other",
+            email=data.email,
+            address=data.address or "Office",
+            department=data.department,
+            position=data.position,
+            location=data.location or "Main Branch",
+        )
+        db.add(emp)
+
     db.commit()
     db.refresh(user)
 
@@ -152,3 +186,29 @@ def get_current_user_from_token(db: Session, token: str) -> User:
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
+
+def get_all_role_permissions(db: Session) -> dict[str, dict[str, bool]]:
+    records = db.query(RolePermission).all()
+    result = {}
+    for r in records:
+        try:
+            result[r.role] = json.loads(r.menu_access)
+        except Exception:
+            result[r.role] = {}
+    return result
+
+
+def save_role_permission(db: Session, role: str, menu_access: dict[str, bool]) -> RolePermission:
+    role_key = role.strip().lower()
+    record = db.query(RolePermission).filter(RolePermission.role == role_key).first()
+    json_str = json.dumps(menu_access)
+    if record:
+        record.menu_access = json_str
+    else:
+        record = RolePermission(role=role_key, menu_access=json_str)
+        db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+

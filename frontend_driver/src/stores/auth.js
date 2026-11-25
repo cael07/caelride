@@ -56,5 +56,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { token, user, isAuthenticated, login, register, logout }
+  async function fetchCurrentUser() {
+    try {
+      const u = await authApi.getMe()
+      if (u) {
+        user.value = u
+        localStorage.setItem('user', JSON.stringify(u))
+      }
+      return u
+    } catch (e) {
+      console.error('Store Fetch Current User Error:', e)
+      throw e
+    }
+  }
+
+  return { token, user, isAuthenticated, login, register, logout, fetchCurrentUser }
 })
