@@ -44,21 +44,10 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# CORS configuration
+# CORS configuration - Allow local dev, LAN IP, mobile webviews (Capacitor/Cordova), and cloud deployments
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://pythonlogin-h4ev.onrender.com",
-        "https://pythonlogin-h4ev.onrender.com/",
-        "https://pythonlogin-driver.onrender.com",
-        "https://pythonlogin-driver.onrender.com/",
-        "https://pythonlogin-passenger.onrender.com",
-        "https://pythonlogin-passenger.onrender.com/",
-        "http://localhost:5173",
-        "http://localhost:5173/",
-        "http://127.0.0.1:5173",
-    ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -170,10 +159,12 @@ def ocr_document(engine: str, payload: OcrRequest):
 
 
 
+@app.get("/")
 async def root():
     return {
-        "service": "PythonLogin Auth API",
+        "service": "CaelRide Backend API",
         "docs": "/docs",
+        "status": "online",
         "health": "/auth/health",
     }
 

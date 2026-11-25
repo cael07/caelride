@@ -12,5 +12,4 @@ Pillow
 websockets
 httpx
 numpy
-easyocr
-
+# easyocr  # Uncomment if deploying on instance with >=2GB RAM

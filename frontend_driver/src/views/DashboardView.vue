@@ -2283,7 +2283,7 @@ onMounted(async () => {
   }
 
   const isRender = window.location.hostname.includes('onrender.com')
-  const host = import.meta.env.VITE_API_URL || (isRender ? 'https://pythonlogin-api.onrender.com' : 'http://localhost:8000')
+  const host = import.meta.env.VITE_API_URL || (isRender ? 'https://caelride-api.onrender.com' : 'http://localhost:8000')
   apiHost.value = host.endsWith('/auth') ? host.slice(0, -5) : host
 
   try {

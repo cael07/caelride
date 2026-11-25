@@ -58,7 +58,7 @@ export const useRideStore = defineStore('ride', {
     },
     getApiHost() {
       const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      const productionHost = 'https://pythonlogin-api.onrender.com';
+      const productionHost = 'https://caelride-api.onrender.com';
       let base = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:8000' : productionHost);
       // If VITE_API_URL has /auth at the end, strip it
       if (base.endsWith('/auth')) {
